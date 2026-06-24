@@ -14,15 +14,76 @@ MANIFEST   = os.path.join(OUT_DIR, "manifest.json")
 SYSCALLS   = "openat,connect,execve,sendto"
 
 def synth_args(schema: dict) -> dict:
-    """Dumb input synthesis from a JSON schema. Good enough for the spike;
-    Phase 1 replaces this with hypothesis-jsonschema."""
-    out = {}
-    for key, spec in (schema or {}).get("properties", {}).items():
-        out[key] = {"string": "canary-input", "integer": 1, "number": 1.0,
-                    "boolean": True, "array": [], "object": {}}.get(
-                    spec.get("type", "string"), "canary-input")
-    return out
+    """Synthesize ONE plausible-and-valid input per field from a JSON schema.
 
+    Strategy (first match wins, per property):
+      1. JSON Schema `format` (uri, email, ipv4, date-time, ...) -- standards-based.
+      2. Key-name heuristics (url, path, query, ...) -- pragmatic; many MCP tools
+         don't set `format` but name fields obviously.
+      3. Type-based default -- the original spike behavior, as a safety net.
+
+    Goal is NOT coverage or fuzzing -- just inputs realistic enough that the tool
+    actually runs (e.g. a `url` field gets a real URL) so we can observe behavior.
+    A constrained `enum` is honored when present (first value), since random
+    strings would be rejected outright.
+    Phase 2+ may swap this for hypothesis-jsonschema if a schema defeats heuristics.
+    """
+    # Benign, obviously-synthetic values. example.com / example.org are reserved
+    # by RFC 2606 for exactly this; using them keeps the probe's own traffic honest.
+    FORMAT_VALUES = {
+        "uri": "http://example.com/",
+        "url": "http://example.com/",
+        "iri": "http://example.com/",
+        "email": "probe@example.com",
+        "idn-email": "probe@example.com",
+        "hostname": "example.com",
+        "ipv4": "192.0.2.1",          # RFC 5737 documentation range
+        "ipv6": "2001:db8::1",        # RFC 3849 documentation range
+        "date-time": "2026-01-01T00:00:00Z",
+        "date": "2026-01-01",
+        "time": "00:00:00Z",
+        "uuid": "00000000-0000-0000-0000-000000000000",
+    }
+    # Substring -> value. Checked against the lowercased property name.
+    KEYNAME_HINTS = (
+        ("url", "http://example.com/"),
+        ("uri", "http://example.com/"),
+        ("link", "http://example.com/"),
+        ("href", "http://example.com/"),
+        ("endpoint", "http://example.com/"),
+        ("path", "/tmp/probe-canary.txt"),
+        ("file", "/tmp/probe-canary.txt"),
+        ("dir", "/tmp"),
+        ("email", "probe@example.com"),
+        ("host", "example.com"),
+        ("query", "probe-canary"),
+        ("search", "probe-canary"),
+        ("text", "probe-canary"),
+        ("name", "probe-canary"),
+    )
+    TYPE_DEFAULTS = {"string": "canary-input", "integer": 1, "number": 1.0,
+                     "boolean": True, "array": [], "object": {}}
+
+    def synth_one(key: str, spec: dict):
+        spec = spec or {}
+        # 0. Honor enum constraints first -- anything else would be rejected.
+        if isinstance(spec.get("enum"), list) and spec["enum"]:
+            return spec["enum"][0]
+        # 1. Explicit JSON Schema format.
+        fmt = spec.get("format")
+        if fmt in FORMAT_VALUES:
+            return FORMAT_VALUES[fmt]
+        # 2. Key-name heuristics (only meaningful for string-ish fields).
+        if spec.get("type", "string") == "string":
+            k = key.lower()
+            for needle, value in KEYNAME_HINTS:
+                if needle in k:
+                    return value
+        # 3. Type default.
+        return TYPE_DEFAULTS.get(spec.get("type", "string"), "canary-input")
+
+    return {key: synth_one(key, spec)
+            for key, spec in (schema or {}).get("properties", {}).items()}
 async def run(server_cmd: list[str]):
     os.makedirs(OUT_DIR, exist_ok=True)
     # Wrap the real server in strace. The MCP SDK speaks stdio to strace, which
