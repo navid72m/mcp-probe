@@ -34,7 +34,9 @@ def _build_parser():
         prog="mcp-behave",
         description="Runtime behavioral auditor for MCP servers. "
                     "Runs a server under strace, then compares what it "
-                    "DECLARED against what it actually DID.",
+                    "DECLARED against what it actually DID.\n\n"
+                    "Subcommands: `mcp-behave push` uploads a JSON audit "
+                    "result to an mcp-behave dashboard.",
     )
     p.add_argument("--version", action="version", version=f"mcp-behave {__version__}")
     p.add_argument(
@@ -84,7 +86,18 @@ def _exit_code(findings: list, fail_on: str) -> int:
     return 3 if any(SEV_RANK.get(s, 0) >= threshold for s, _ in findings) else 0
 
 
+SUBCOMMANDS = {"push"}
+
+
 def main(argv=None):
+    raw_argv = sys.argv[1:] if argv is None else list(argv)
+    if raw_argv and raw_argv[0] in SUBCOMMANDS:
+        sub = raw_argv[0]
+        rest = raw_argv[1:]
+        if sub == "push":
+            from . import push as push_mod
+            return push_mod.main(rest)
+
     parser = _build_parser()
     args = parser.parse_args(argv)
 

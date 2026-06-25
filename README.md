@@ -61,6 +61,37 @@ Exit codes: `0` clean, `3` findings at or above `--fail-on` threshold,
 - `--transport {stdio,sse,streamable-http}` — remote transports skip syscall tracing.
 - `--out-dir PATH` — where `manifest.json` and `trace.log` are written.
 
+## Push results to a dashboard
+
+`mcp-behave push` uploads a JSON audit result to an
+[mcp-behave dashboard](https://github.com/navid72m/mcp-behave-dashboard).
+
+```bash
+# 1. Sign in at https://<your-dashboard>.vercel.app/settings and mint a token.
+export MCP_BEHAVE_DASHBOARD_URL=https://<your-dashboard>.vercel.app
+export MCP_BEHAVE_TOKEN=mcpb_...
+
+# 2. Audit something with --json and pipe it to push.
+mcp-behave --json python -m mcp_server_fetch \
+  | mcp-behave push --server-name server-fetch --category network
+
+# Or save to a file first, then push.
+mcp-behave --json python -m mcp_server_fetch > audit.json
+mcp-behave push audit.json --server-name server-fetch --category network
+```
+
+Flags worth knowing:
+
+- `--server-name NAME` — canonical name on the dashboard. Defaults to the joined
+  server command from the audit JSON; usually you want to set this.
+- `--description TEXT` — used the first time this server is submitted.
+- `--github-url URL`, `--npm-package PKG`, `--author NAME` — optional server metadata.
+- `--category {local,network,database,other}` — defaults to `other`.
+- `--dry-run` — print the JSON payload that would be POSTed and exit.
+
+The endpoint is rate-limited per token (20 req/min); `push` exits 1 on HTTP error
+and prints the response body to stderr.
+
 ## What it detects
 
 - **Undeclared network egress** — IP:port destinations reached during tool calls
