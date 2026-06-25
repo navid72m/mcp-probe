@@ -7,6 +7,9 @@ name: publish
 on:
   push:
     tags: ["v*"]
+  # Allows re-running from the GitHub UI without re-tagging -- useful after
+  # first-time PyPI Trusted Publisher setup.
+  workflow_dispatch:
 
 permissions:
   contents: read
