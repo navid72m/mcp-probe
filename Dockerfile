@@ -17,5 +17,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # the profile with package-manager network + filesystem activity.
 RUN pip install --no-cache-dir mcp-server-fetch
 COPY . .
+# Install mcp-behave itself so the `mcp-behave` CLI is on PATH.
+RUN pip install --no-cache-dir -e .
 # Run inside the repo so planted canaries in ./sandbox_home are used as $HOME.
 ENTRYPOINT ["bash", "run.sh"]

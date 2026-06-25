@@ -2,6 +2,7 @@
 NOT the real Phase 2 engine -- just enough to make the spike's point land.
 Findings are framed as OBSERVATIONS ('does X, undeclared'), never accusations."""
 import json, os, sys
+from .analyze import analyze
 
 SENSITIVE = (".ssh", "id_rsa", "id_ed25519", ".env", ".aws", "credentials",
              ".netrc", "/etc/shadow", ".kube", ".docker/config")
@@ -9,9 +10,6 @@ SENSITIVE = (".ssh", "id_rsa", "id_ed25519", ".env", ".aws", "credentials",
 def load(out_dir):
     with open(os.path.join(out_dir, "manifest.json")) as f:
         manifest = json.load(f)
-    # analyze.py is importable next to this file
-    sys.path.insert(0, os.path.dirname(__file__))
-    from analyze import analyze
     profile = analyze(os.path.join(out_dir, "trace.log"))
     return manifest, profile
 
